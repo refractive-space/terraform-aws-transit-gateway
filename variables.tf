@@ -223,9 +223,9 @@ variable "flow_log_traffic_type" {
 }
 
 variable "flow_log_max_aggregation_interval" {
-  description = "The maximum interval of time during which a flow of packets is captured and aggregated into a flow log record. Valid Values: `60` seconds or `600` seconds"
+  description = "The maximum interval of time during which a flow of packets is captured and aggregated into a flow log record. Valid Values: `60` seconds"
   type        = number
-  default     = 600
+  default     = 60
 }
 
 variable "flow_log_deliver_cross_account_role" {
