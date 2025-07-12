@@ -58,9 +58,154 @@ module "vpc" {
 }
 ```
 
+## Usage with Flow Logs
+
+Transit Gateway Flow Logs can be enabled to capture information about the IP traffic going to and from network interfaces in your Transit Gateway. Flow logs can help with monitoring network traffic, troubleshooting connectivity issues, and detecting anomalous traffic patterns.
+
+### Basic Flow Logs to CloudWatch
+
+```hcl
+module "tgw" {
+  source  = "terraform-aws-modules/transit-gateway/aws"
+  version = "~> 2.0"
+
+  name        = "my-tgw"
+  description = "My TGW with flow logs enabled"
+
+  # Enable flow logs
+  enable_flow_log                      = true
+  create_flow_log_cloudwatch_log_group = true
+  create_flow_log_cloudwatch_iam_role  = true
+
+  vpc_attachments = {
+    vpc = {
+      vpc_id     = module.vpc.vpc_id
+      subnet_ids = module.vpc.private_subnets
+    }
+  }
+
+  tags = {
+    Purpose = "tgw-with-flow-logs"
+  }
+}
+```
+
+### Flow Logs with Custom CloudWatch Configuration
+
+```hcl
+module "tgw" {
+  source  = "terraform-aws-modules/transit-gateway/aws"
+  version = "~> 2.0"
+
+  name        = "my-tgw"
+  description = "My TGW with custom flow logs"
+
+  # Flow log configuration
+  enable_flow_log                      = true
+  create_flow_log_cloudwatch_log_group = true
+  create_flow_log_cloudwatch_iam_role  = true
+
+  # CloudWatch log group settings
+  flow_log_cloudwatch_log_group_name_prefix       = "/aws/transit-gateway/flowlogs/"
+  flow_log_cloudwatch_log_group_retention_in_days = 14
+  flow_log_cloudwatch_log_group_kms_key_id        = aws_kms_key.log_key.arn
+
+  # Flow log settings
+  flow_log_traffic_type             = "ALL"
+  flow_log_max_aggregation_interval = 60
+  flow_log_log_format               = "$${version} $${account-id} $${transit-gateway-id} $${transit-gateway-attachment-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action}"
+
+  vpc_attachments = {
+    vpc = {
+      vpc_id     = module.vpc.vpc_id
+      subnet_ids = module.vpc.private_subnets
+    }
+  }
+
+  tgw_flow_log_tags = {
+    LogType = "TransitGatewayFlow"
+  }
+
+  tags = {
+    Purpose = "tgw-with-custom-flow-logs"
+  }
+}
+```
+
+### Flow Logs to S3
+
+```hcl
+module "tgw" {
+  source  = "terraform-aws-modules/transit-gateway/aws"
+  version = "~> 2.0"
+
+  name        = "my-tgw"
+  description = "My TGW with S3 flow logs"
+
+  # Flow log configuration for S3
+  enable_flow_log           = true
+  flow_log_destination_type = "s3"
+  flow_log_destination_arn  = aws_s3_bucket.flow_logs.arn
+
+  # S3 destination options
+  flow_log_file_format                = "parquet"
+  flow_log_hive_compatible_partitions = true
+  flow_log_per_hour_partition         = true
+
+  vpc_attachments = {
+    vpc = {
+      vpc_id     = module.vpc.vpc_id
+      subnet_ids = module.vpc.private_subnets
+    }
+  }
+
+  tags = {
+    Purpose = "tgw-with-s3-flow-logs"
+  }
+}
+
+resource "aws_s3_bucket" "flow_logs" {
+  bucket        = "my-tgw-flow-logs-bucket"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_policy" "flow_logs" {
+  bucket = aws_s3_bucket.flow_logs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.flow_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.flow_logs.arn
+      }
+    ]
+  })
+}
+```
+
 ## Examples
 
-- [Complete example](https://github.com/terraform-aws-modules/terraform-aws-transit-gateway/tree/master/examples/complete) shows TGW in combination with the [VPC module](https://github.com/terraform-aws-modules/terraform-aws-vpc) and [Resource Access Manager (RAM)](https://aws.amazon.com/ram/).
+- [Complete example](https://github.com/terraform-aws-modules/terraform-aws-transit-gateway/tree/master/examples/complete) shows TGW in combination with the [VPC module](https://github.com/terraform-aws-modules/terraform-aws-vpc), [Resource Access Manager (RAM)](https://aws.amazon.com/ram/), and basic flow logging configuration.
+- [Flow Logs example](https://github.com/terraform-aws-modules/terraform-aws-transit-gateway/tree/master/examples/flow-logs) demonstrates comprehensive flow logging configurations including CloudWatch Logs, S3 destinations, and external resource usage.
 - [Multi-account example](https://github.com/terraform-aws-modules/terraform-aws-transit-gateway/tree/master/examples/multi-account) shows TGW resources shared with different AWS accounts (via [Resource Access Manager (RAM)](https://aws.amazon.com/ram/)).
 
 <!-- BEGIN_TF_DOCS -->
